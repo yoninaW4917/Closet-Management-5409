@@ -1,167 +1,38 @@
-import os
-import PySimpleGUI as sg
-from tinydb import TinyDB, Query
-from tinydb.storages import MemoryStorage
-from cryptography.fernet import Fernet
-import base64
-import hashlib
-import json
-import subprocess
+### Code Explanation
 
-# Constants
-imageFileName = "chargers.jpg"
-dataFolder = "data"
+#### User Authentication
 
-# Theme
-sg.theme('DarkGrey2')
-
-def generateKey(password):
-    """
-    Generate an encryption key from a password.
-
-    Args:
-        password (str): The password to generate the key from.
-
-    Returns:
-        bytes: The generated encryption key.
-    """
-    return base64.urlsafe_b64encode(hashlib.sha256(password.encode()).digest())
-
-def encryptData(data, key):
-    """
-    Encrypt data using the provided key.
-
-    Args:
-        data (str): The data to encrypt.
-        key (bytes): The encryption key.
-
-    Returns:
-        str: The encrypted data as a string.
-    """
-    fernet = Fernet(key)
-    return fernet.encrypt(data.encode()).decode()
-
-def decryptData(data, key):
-    """
-    Decrypt data using the provided key.
-
-    Args:
-        data (str): The encrypted data to decrypt.
-        key (bytes): The encryption key.
-
-    Returns:
-        str: The decrypted data as a string.
-    """
-    fernet = Fernet(key)
-    return fernet.decrypt(data.encode()).decode()
-
-def loadData(username, password):
-    """
-    Load data from a file, decrypt it, and load it into a TinyDB instance.
-
-    Args:
-        username (str): The username to determine the file name.
-        password (str): The password to decrypt the data.
-
-    Returns:
-        Tuple[TinyDB, Table]: The TinyDB instance and the drawers table.
-    """
-    if not os.path.exists(dataFolder):
-        os.makedirs(dataFolder)
-        
-    filePath = os.path.join(dataFolder, f"{username}.json")
-    
-    if os.path.exists(filePath):
-        with open(filePath, 'r') as file:
-            encryptedData = file.read()
-        try:
-            decryptedData = decryptData(encryptedData, generateKey(password))
-            db = TinyDB(storage=MemoryStorage)  # type: ignore
-            db.storage.write(json.loads(decryptedData))  # Load decrypted data into TinyDB
-            drawersTable = db.table('drawers')
-            return db, drawersTable
-        except Exception as e:
-            sg.popup_error("Invalid password or data corrupted!", str(e))
-            return None, None
-    else:
-        db = TinyDB(filePath)
-        drawersTable = db.table('drawers')
-        return db, drawersTable
-
-def saveData(username, password, db):
-    """
-    Save data from a TinyDB instance to a file, encrypting it.
-
-    Args:
-        username (str): The username to determine the file name.
-        password (str): The password to encrypt the data.
-        db (TinyDB): The TinyDB instance containing the data.
-    """
-    if not os.path.exists(dataFolder):
-        os.makedirs(dataFolder)
-    
-    filePath = os.path.join(dataFolder, f"{username}.json")
-    data = json.dumps(db.storage.read())  # Serialize the data from TinyDB
-    encryptedData = encryptData(data, generateKey(password))
-    with open(filePath, 'w') as file:
-        file.write(encryptedData)
-
-def readData():
-    """
-    Read and return all data from the drawers table.
-
-    Returns:
-        dict: The data from the drawers table.
-    """
-    data = {}
-    for item in drawersTable.all():
-        data[item['drawer']] = item['items']
-    return data
-
-def writeData(data):
-    """
-    Write data to the drawers table.
-
-    Args:
-        data (dict): The data to write to the drawers table.
-    """
-    drawersTable.truncate()  # Clear the table first
-    for key, items in data.items():
-        drawersTable.insert({'drawer': key, 'items': items})
-
-def popup(title, message):
-    """
-    Create a popup window with a message.
-
-    Args:
-        title (str): The title of the popup window.
-        message (str): The message to display in the popup window.
-    """
-    layout = [
-        [sg.Text(message)],
-        [sg.Button('OK')]
-    ]
-    window = sg.Window(title, layout, modal=True)
-    while True:
-        event, _ = window.read()
-        if event == sg.WIN_CLOSED or event == 'OK':
-            break
-    window.close()
-
+```python
 # Get username and password
 username = sg.popup_get_text("Enter your username:")
 if username is None:  # If the user cancels, exit the program
     exit()
+```
+- This block creates a popup to prompt the user for their username.
+- If the user cancels or closes the popup, the program exits.
 
+```python
 password = sg.popup_get_text("Enter your password:", password_char='*')
 if password is None:  # If the user cancels, exit the program
     exit()
+```
+- This block creates a popup to prompt the user for their password, masking the input with `*`.
+- If the user cancels or closes the popup, the program exits.
 
+#### Database Initialization
+
+```python
 # Initialize the database
 db, drawersTable = loadData(username, password)
 if db is None:
     exit()
+```
+- This initializes the database by calling `loadData` with the username and password.
+- If the database cannot be loaded (e.g., due to incorrect password), the program exits.
 
+#### Main GUI Layout
+
+```python
 # Main GUI layout
 layout = [
     [sg.Text("Choose an option:")],
@@ -170,19 +41,36 @@ layout = [
     [sg.Button("Tired?")],  # New Button
     [sg.Exit()]
 ]
+```
+- This defines the layout of the main GUI window with options for different actions.
 
+```python
 # Create the window
 window = sg.Window("Drawer Management System", layout)
+```
+- This creates the main application window with the specified layout.
 
+#### Event Loop
+
+```python
 # Event loop
 while True:
     event, values = window.read()
     if event == sg.WIN_CLOSED or event == 'Exit':
         saveData(username, password, db)
         break
-    
-    data = readData()
+```
+- This loop handles events (e.g., button clicks) in the GUI.
+- If the window is closed or the "Exit" button is clicked, the data is saved and the loop breaks, ending the program.
 
+```python
+    data = readData()
+```
+- This reads all the data from the drawers table.
+
+#### New Drawer
+
+```python
     if event == "New Drawer":
         drawerName = sg.popup_get_text("Enter the drawer name:")
         if drawerName:
@@ -207,7 +95,15 @@ while True:
                     popup("Success", "Drawer and objects added successfully!")
                 else:
                     popup("Error", "Quantity must be a number!")
+```
+- This block handles creating a new drawer.
+- Prompts the user for a drawer name, checks if it exists, and prompts for item details.
+- If the drawer already exists, asks if the user wants to overwrite it.
+- Adds items to the drawer and writes the data back to the database.
 
+#### Add/Remove Item
+
+```python
     elif event == "Add/Remove Item":
         drawerName = sg.popup_get_text("Enter the drawer name:")
         if drawerName in data:
@@ -238,7 +134,14 @@ while True:
                 popup("Error", "Please enter 'a' or 'r' for add or remove!")
         else:
             popup("Error", f"Drawer '{drawerName}' not found")
+```
+- This block handles adding or removing items from a drawer.
+- Prompts the user for the drawer name, checks if it exists, and prompts for action (add or remove).
+- Handles adding items to the drawer and removing items from the drawer, updating the database accordingly.
 
+#### Search for Item
+
+```python
     elif event == "Search for Item":
         searchItem = sg.popup_get_text("Enter the object name to search for:")
         foundItems = []
@@ -250,7 +153,14 @@ while True:
             popup("Found", "\n".join(foundItems))
         else:
             popup("Not Found", f"Object '{searchItem}' not found")
+```
+- This block handles searching for an item across all drawers.
+- Prompts the user for the item name and searches through all drawers.
+- Displays a popup with the search results.
 
+#### Display Drawer
+
+```python
     elif event == "Display Drawer":
         drawerNames = list(data.keys())
         if drawerNames:
@@ -271,7 +181,13 @@ while True:
             windowSelect.close()
         else:
             popup("Error", "No drawers available to display")
+```
+- This block handles displaying the contents of a selected drawer.
+- Prompts the user to select a drawer and displays its contents in a popup.
 
+#### Remove Drawer
+
+```python
     elif event == "Remove Drawer":
         drawerNames = list(data.keys())
         if drawerNames:
@@ -295,8 +211,22 @@ while True:
             windowRemove.close()
         else:
             popup("Error", "No drawers available to remove")
+```
+- This block handles removing a selected drawer.
+- Prompts the user to select a drawer and confirms the deletion.
+- Removes the drawer and updates the database.
 
+#### Tired?
+
+```python
     elif event == "Tired?":
         subprocess.Popen(["python", "catch.py"])  # This line runs catch.py
+```
+- This block runs the `catch.py` script using `subprocess.Popen`.
 
+#### Close Window
+
+```python
 window.close()
+```
+- This closes the main application window.
